@@ -358,7 +358,8 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
                         width=cls.WIRE_LW
                     ),
                     zorder=1,
-                    showlegend=False
+                    showlegend=False,
+                    hoverinfo="skip"
                 )
             )
             # ax.plot(
@@ -583,15 +584,10 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
         
         #ax.set_xlim(left_wire - 1.5, right_wire + 0.5)
         fig.update_yaxes(
-            range=[y_top, y_bottom], 
-            scaleanchor="x",        
-            scaleratio=1,
+            range=[y_bottom, y_top],
+            autorange=False,
             visible=False
         )
-        # fig.update_yaxes(
-        #     scaleanchor="x",
-        #     scaleratio=1
-        # ) # this anchors the y axis to the x axis by 1.0 scale, so should make a square box
         # ax.set_ylim(y_bottom, y_top)
         # ax.set_aspect("equal")
         # ax.axis("off")
@@ -666,6 +662,7 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
             )
 
         )
+
         fig.update_xaxes(visible=False)
         fig.update_yaxes(
             visible=False,
@@ -673,6 +670,10 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
             autorange="reversed"
         )
         
+        hover_string = cls._draw_gate_hover_text(elem)
+        cls._draw_hover_box(fig, x - box_width / 2, y - cls.GATE_BOX_HEIGHT / 2, 
+        (x - box_width / 2) + box_width, (y - cls.GATE_BOX_HEIGHT / 2) + cls.GATE_BOX_HEIGHT, hover_string)
+
         # rect = mpatches.FancyBboxPatch(
         #     (x - box_width / 2, y - cls.GATE_BOX_HEIGHT / 2),
         #     box_width,
@@ -915,3 +916,57 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
         #     zorder=2,
         # )
         # ax.add_patch(rect)
+    
+    @classmethod
+    def _draw_hover_box(cls, fig, x0, y0, x1, y1, hover_text) -> None:
+        """Draws a transparent go.Scatter polygon to act as a hover trigger over a GateBox."""
+        fig.add_trace(
+            go.Scatter(
+                x=[x0, x1, x1, x0, x0], # bottom-left, bottom-right, top-right, top-left
+                y=[y0, y0, y1, y1, y0],
+                mode="lines",
+                fill="toself",
+                fillcolor="rgba(0,0,0,0)", #transparent
+                line=dict(color="rgba(0,0,0,0)"),
+                hoveron="fills",
+                hovertext=hover_text,
+                hovertemplate="%{hover_text}<extra></extra>",
+                showlegend=False,
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font_size=12,
+                    font_family="monospace"
+                ),
+                zorder=10
+            )
+        )
+
+    @classmethod
+    def _draw_gate_hover_text(cls, element, device_metadata=None):
+        """
+        _build_gate_hover_text: PlotlyCircuitDiagram + GateBox + Dictionary of Properties (optional)
+         Extracts gate properties and formats them into an HTML string for Plotly tooltips.
+        """
+        print(f"Going through text right now!")
+        gate_name = getattr(element, "label", getattr(element, "name", "Unknown"))
+        targets = getattr(element, "target", [])
+        target_str = ", ".join([f"q{t}" for t in targets]) if targets else "None"
+        
+        hover_html = f"<b>Gate:</b> {gate_name}<br>" # html string
+        hover_html += f"<b>Target(s):</b> {target_str}<br>"
+        
+        # IF gate has parameter (for e.g. rotational gates like rx + ry + rz -> provide the angle or additional parameters?)
+        if hasattr(element, "angle"):
+            hover_html += f"<b>Angle:</b> {element.angle:.3f} rad<br>"
+        elif hasattr(element, "parameters") and element.parameters:
+            params_str = ", ".join([f"{p:.3f}" for p in element.parameters])
+            hover_html += f"<b>Params:</b> {params_str}<br>"
+
+        hover_html += "<br><i>--- Device Info ---</i><br>" # IF additional information on device -> add more
+        if device_metadata:
+            for key, value in device_metadata.items():
+                hover_html += f"<b>{key.capitalize()}:</b> {value}<br>"
+        else:
+            hover_html += "<i>No metadata available</i>"
+
+        return hover_html
