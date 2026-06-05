@@ -487,16 +487,33 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
         IF BarrierMaker -> _draw_barrier
 
         Again, we'll have to replace the axes from matplotlib with the PlotlyFigure
+
+        For hover interactivity, need to build a dictionary of controls by column
+        Example: Column 1 has controls on rows 0 and 1
         """
+        col_controls = {}
+
+        for elem in layout.elements:
+            if isinstance(elem, ControlDot):
+                if elem.col not in col_controls:
+                    col_controls[elem.col] = []
+                col_controls[elem.col].append(elem.row)
+
         for elem in layout.elements:
             if isinstance(elem, GateBox):
-                cls._draw_gate_box(fig, elem, col_x[elem.col])
+                # asses control directly in new GateBox method
+                col_controls_temp = col_controls.get(elem.col, None)
+                cls._draw_gate_box(fig, elem, col_x[elem.col], control_qubits=col_controls_temp)
+            
             elif isinstance(elem, ControlDot):
                 cls._draw_control_dot(fig, elem, col_x[elem.col])
+            
             elif isinstance(elem, SwapMarker):
                 cls._draw_swap_marker(fig, elem, col_x[elem.col])
+            
             elif isinstance(elem, Connection):
                 cls._draw_connection(fig, elem, col_x[elem.col])
+            
             elif isinstance(elem, BarrierMarker):
                 cls._draw_barrier(fig, elem, col_x[elem.col])
 
@@ -593,7 +610,7 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
         # ax.axis("off")
 
     @classmethod
-    def _draw_gate_box(cls, fig: go.Figure, elem: GateBox, x: float) -> None:
+    def _draw_gate_box(cls, fig: go.Figure, elem: GateBox, x: float, control_qubits=None) -> None:
         """
         _draw_gate_box: PlotlyCircuitDiagram + PlotlyFigure + GateBox + Float -> None
 
@@ -670,7 +687,7 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
             autorange="reversed"
         )
         
-        hover_string = cls._draw_gate_hover_text(elem)
+        hover_string = cls._draw_gate_hover_text(elem, control_qubits=control_qubits)
         cls._draw_hover_box(fig, x - box_width / 2, y - cls.GATE_BOX_HEIGHT / 2, 
         (x - box_width / 2) + box_width, (y - cls.GATE_BOX_HEIGHT / 2) + cls.GATE_BOX_HEIGHT, hover_string)
 
@@ -929,8 +946,9 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
                 fillcolor="rgba(0,0,0,0)", #transparent
                 line=dict(color="rgba(0,0,0,0)"),
                 hoveron="fills",
-                hovertext=hover_text,
-                hovertemplate="%{hover_text}<extra></extra>",
+                text=hover_text,
+                name="",
+                hovertemplate="%{hovertext}<extra></extra>",
                 showlegend=False,
                 hoverlabel=dict(
                     bgcolor="white",
@@ -942,31 +960,46 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
         )
 
     @classmethod
-    def _draw_gate_hover_text(cls, element, device_metadata=None):
+    def _draw_gate_hover_text(cls, element, control_qubits=None, device_metadata=None):
         """
         _build_gate_hover_text: PlotlyCircuitDiagram + GateBox + Dictionary of Properties (optional)
          Extracts gate properties and formats them into an HTML string for Plotly tooltips.
+
+         first identify the gate name
+         next figure out the targets and controls (if any)
+         then start building the string + its parametrs (if any)
         """
-        print(f"Going through text right now!")
-        gate_name = getattr(element, "label", getattr(element, "name", "Unknown"))
-        targets = getattr(element, "target", [])
-        target_str = ", ".join([f"q{t}" for t in targets]) if targets else "None"
+        print(f"DEBUG - Gate: {getattr(element, 'label', 'Unknown')}, Controls: {control_qubits}, Type: {type(control_qubits)}")
+        raw_name = str(getattr(element, "label", "Unknown"))
+
+        gate_name = raw_name
+        params_str = ""
+
+        if "(" in raw_name and ")" in raw_name:
+            gate_name = raw_name.split("(")[0].strip()
+            params_str = raw_name.split("(")[1].replace(")", "").strip()
+
+        target_qubit = getattr(element, "row", "Unknown")
+        target_str = f"q{target_qubit}"
         
+        # Control Gate conditions
+        if control_qubits:
+            if not gate_name.upper().startswith("C"):
+                if len(gate_name) == 1:
+                    gate_name = f"C{gate_name.upper()}"
+                else:
+                    gate_name = f"C{gate_name}"
+
         hover_html = f"<b>Gate:</b> {gate_name}<br>" # html string
         hover_html += f"<b>Target(s):</b> {target_str}<br>"
         
         # IF gate has parameter (for e.g. rotational gates like rx + ry + rz -> provide the angle or additional parameters?)
-        if hasattr(element, "angle"):
-            hover_html += f"<b>Angle:</b> {element.angle:.3f} rad<br>"
-        elif hasattr(element, "parameters") and element.parameters:
-            params_str = ", ".join([f"{p:.3f}" for p in element.parameters])
-            hover_html += f"<b>Params:</b> {params_str}<br>"
+        if params_str:
+            hover_html += f"<br><b>Gate Parameter/s:</b> {params_str}"
 
-        hover_html += "<br><i>--- Device Info ---</i><br>" # IF additional information on device -> add more
         if device_metadata:
+            hover_html += "<br><br><i>Additional Device Information:</i><br>"
             for key, value in device_metadata.items():
                 hover_html += f"<b>{key.capitalize()}:</b> {value}<br>"
-        else:
-            hover_html += "<i>No metadata available</i>"
 
         return hover_html
