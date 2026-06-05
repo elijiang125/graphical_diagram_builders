@@ -208,7 +208,7 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
         """Return the width of a gate box rendered with *label*."""
         char_width = cls.GATE_FONT_SIZE * 0.012
         text_width = len(label) * char_width
-        return max(cls.GATE_BOX_MIN_WIDTH, text_width + cls.GATE_BOX_PADDING) * 96 # multiply by 96
+        return max(cls.GATE_BOX_MIN_WIDTH, text_width + cls.GATE_BOX_PADDING)
 
     @classmethod
     def _compute_column_x(cls, layout: CircuitLayout) -> tuple[list[float], list[float]]:
@@ -221,7 +221,7 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
             Tuple of ``(centers, widths)`` lists of length ``num_moments``.
         """
         n_cols = max(layout.num_moments, 1)
-        widths = [cls.COL_WIDTH] * n_cols * 96 # multiply by 96
+        widths = [cls.COL_WIDTH] * n_cols
         for elem in layout.elements:
             if isinstance(elem, GateBox):
                 widths[elem.col] = max(
@@ -230,7 +230,7 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
         centers: list[float] = []
         cursor = 0.0
         for w in widths:
-            centers.append((cursor + w / 2) * 96) # multiply by 96
+            centers.append((cursor + w / 2))
             cursor += w
         return centers, widths
 
@@ -279,8 +279,6 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
 
         Matplotlib's axes are needed to pass through helper methods, but Plotly's Axis is just a string and boolean.
         We'll have to require the helper functions that take in a Matplotlib ax, to take in a PlotlyFigure instead.
-
-        IMPORTANT: this means the canvas layout must be multiplied by 96, DO NOT MESS WITH THE DATA COORDS
         """
         n_rows = max(layout.num_qubits, 1)
 
@@ -293,10 +291,16 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
 
         # Plotly figure initialize
         fig = go.Figure()
+        fig.update_yaxes(
+            visible=False,
+        )
+        fig.update_xaxes(visible=False)
         fig.update_layout(
             autosize=False,
             width = fig_width * 96, 
-            height = fig_height * 96
+            height = fig_height * 96,
+            plot_bgcolor="white",
+            paper_bgcolor="white"
         )
         # fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
@@ -316,10 +320,6 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
             cls._draw_footer(fig, footer_lines, left_wire, label_y_bottom)
 
         cls._configure_axes(fig, left_wire, right_wire, label_y_top, label_y_bottom, footer_lines)
-
-        # closest to auto-adjusting layout is updating the xy axes
-        fig.update_xaxes(automargin=True) #expands margins if labels are too long
-        fig.update_yaxes(automargin=True)
         # fig.tight_layout()
         return fig
 
@@ -433,7 +433,7 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
                 yref = "y",
                 text = label,
                 showarrow=False,
-                xanchor="middle",
+                xanchor="center",
                 yanchor="middle",
                 font=dict(
                     size=cls.MOMENT_LABEL_FONT_SIZE,
@@ -627,8 +627,10 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
                     color, family, size, weight, textcase, variant
                 padding: Number <- internal padding distance in pixels from edge of shape
         """
-        y = -elem.row * cls.ROW_HEIGHT
 
+        
+        y = -elem.row * cls.ROW_HEIGHT
+        print(f"Drawing box at x={x}, y={y}")
         box_width = cls._gate_box_width(elem.label)
 
         fig.add_shape(
@@ -654,6 +656,13 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
                     color=cls.GATE_TEXT_COLOR,
                 )
             )
+
+        )
+        fig.update_xaxes(visible=False)
+        fig.update_yaxes(
+            visible=False,
+            scaleanchor="x",
+            autorange="reversed"
         )
         
         # rect = mpatches.FancyBboxPatch(
@@ -729,6 +738,8 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
         """
 
         y = -elem.row * cls.ROW_HEIGHT
+
+        print(f"Drawing dot  at x={x}, y={y}")
         if elem.filled:
             # circle = plt.Circle(
             #     (x, y),
@@ -794,6 +805,7 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
 
         """
         y = -elem.row * cls.ROW_HEIGHT
+        print(f"Drawing x at x={x}, y={y}")
         fig.add_trace(
             go.Scatter(
                 x=[x],
@@ -825,7 +837,7 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
     def _draw_connection(cls, fig: go.Figure, elem: Connection, x: float) -> None:
         y_start = -elem.row_start * cls.ROW_HEIGHT
         y_end = -elem.row_end * cls.ROW_HEIGHT
-
+        print(f"Drawing gate at x={x}, y={y_start} to {y_end}")
         fig.add_shape(
             xref="x",
             yref="y",
@@ -839,7 +851,7 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
                 color=cls.CONNECTION_COLOR,
                 dash="solid"
             ),
-            layer='above'
+            layer='below'
             )
         
         # ax.plot(
@@ -859,6 +871,8 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
         get no marker.
         """
         y = -elem.row * cls.ROW_HEIGHT
+
+        print(f"Drawing barrier at x={x}, y={y}")
         half_h = cls.ROW_HEIGHT * cls.BARRIER_HEIGHT_FRAC / 2
         half_w = cls.BARRIER_WIDTH / 2
 
