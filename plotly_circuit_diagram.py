@@ -357,7 +357,8 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
                         color=cls.WIRE_COLOR,
                         width=cls.WIRE_LW
                     ),
-                    zorder=1
+                    zorder=1,
+                    showlegend=False
                 )
             )
             # ax.plot(
@@ -570,20 +571,27 @@ class PlotlyCircuitDiagram(GraphicalCircuitDiagram):
 
         * don't think I'm right on this...
         """
-        fig.update_xaxes(range=[left_wire-1.5, right_wire + 0.5])
-        #ax.set_xlim(left_wire - 1.5, right_wire + 0.5)
+        fig.update_xaxes(
+            range=[left_wire - 1.5, right_wire + 0.5],
+            visible=False
+        )
+
         y_top = label_y_top + 0.4
         y_bottom = label_y_bottom - 0.4
         if footer_lines:
             y_bottom -= len(footer_lines) * cls.ROW_HEIGHT * 0.5
         
-        fig.update_yaxes(range=[y_bottom, y_top])
+        #ax.set_xlim(left_wire - 1.5, right_wire + 0.5)
         fig.update_yaxes(
-            scaleanchor="x",
-            scaleratio=1
-        ) # this anchors the y axis to the x axis by 1.0 scale, so should make a square box
-        fig.update_xaxes(visible=False)
-        fig.update_yaxes(visible=False)
+            range=[y_top, y_bottom], 
+            scaleanchor="x",        
+            scaleratio=1,
+            visible=False
+        )
+        # fig.update_yaxes(
+        #     scaleanchor="x",
+        #     scaleratio=1
+        # ) # this anchors the y axis to the x axis by 1.0 scale, so should make a square box
         # ax.set_ylim(y_bottom, y_top)
         # ax.set_aspect("equal")
         # ax.axis("off")
